@@ -1,29 +1,81 @@
 {
   "expo": {
-    "name": "flystep_app",
+    "name": "Seere Flystep",
     "slug": "flystep_app",
     "version": "1.0.0",
+    "scheme": "flystep",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#161F28"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to connect to nearby fitness devices.",
+        "NSBluetoothPeripheralUsageDescription": "Bluetooth is required to communicate with your devices.",
+        "NSLocationWhenInUseUsageDescription": "Location access is required for Bluetooth scanning.",
+        "UIBackgroundModes": [
+          "bluetooth-central"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.flystep.app"
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true
+        "versionCode": 8,
+        "adaptiveIcon": {
+            "foregroundImage": "./assets/adaptive-icon.png",
+            "backgroundColor": "#161F28"
+        },
+        "edgeToEdgeEnabled": true,
+        "permissions": [
+            "android.permission.BLUETOOTH",
+            "android.permission.BLUETOOTH_ADMIN",
+            "android.permission.BLUETOOTH_CONNECT",
+            "android.permission.BLUETOOTH_SCAN",
+            "android.permission.ACCESS_FINE_LOCATION",
+            "android.permission.ACCESS_COARSE_LOCATION"
+        ],
+        "package": "com.flystep.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "modes": [
+            "central"
+          ]
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+              "compileSdkVersion": 36,
+              "targetSdkVersion": 36,
+              "minSdkVersion": 24,
+              "enableMinifyInReleaseBuilds": true,
+              "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
+      ],
+      "expo-secure-store"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "22dcda4d-31e4-41c1-8903-03557a64f106"
+      }
     }
   }
 }

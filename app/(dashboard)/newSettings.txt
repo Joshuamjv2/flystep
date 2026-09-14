@@ -1,0 +1,176 @@
+import React, { useEffect, useState } from "react";
+import { StyleSheet, Switch, TouchableOpacity, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useColorScheme } from "react-native";
+import { Colors } from "../../constants/Colors";
+import ThemedView from "../../components/ThemedView";
+import ThemedText from "../../components/ThemedText";
+import ThemedCard from "../../components/ThemedCard";
+import { useRouter } from "expo-router";
+import { useAuth } from "../../hooks/useAuth";
+
+const LANGUAGES = [
+  { code: "en", label: "English", flag: "flag-outline" },
+  { code: "de", label: "Deutsch", flag: "flag-outline" },
+  { code: "fr", label: "Français", flag: "flag-outline" },
+  { code: "es", label: "Español", flag: "flag-outline" },
+  { code: "it", label: "Italiano", flag: "flag-outline" },
+];
+
+export default function SettingsScreen() {
+  const colorScheme = useColorScheme();
+  const theme = Colors[colorScheme] ?? Colors.light;
+  const router = useRouter();
+
+  const {
+    handleLogout,
+    language: contextLanguage,
+    emailUpdates: contextEmailUpdates,
+    handleLanguage,
+    handleEmails,
+  } = useAuth();
+
+  const [language, setLanguage] = useState(contextLanguage || "en");
+  const [emailUpdates, setEmailUpdates] = useState(contextEmailUpdates ?? true);
+
+  useEffect(() => {
+    handleLanguage(language);
+  }, [language]);
+
+  useEffect(() => {
+    handleEmails(emailUpdates);
+  }, [emailUpdates]);
+
+  return (
+    <ThemedView safeTop style={styles.container}>
+      {/* Scrollable / Main Content */}
+      <View style={{ flex: 1 }}>
+        <ThemedText title style={styles.title}>
+          Settings
+        </ThemedText>
+
+        {/* LANGUAGE SELECTOR */}
+        <ThemedCard style={styles.section}>
+          <ThemedText title style={styles.sectionTitle}>
+            Language
+          </ThemedText>
+
+          {LANGUAGES.map((lang) => (
+            <TouchableOpacity
+              key={lang.code}
+              onPress={() => setLanguage(lang.code)}
+              style={[
+                styles.languageRow,
+                {
+                  backgroundColor:
+                    language === lang.code
+                      ? theme.selectedBackground
+                      : "transparent",
+                },
+              ]}
+            >
+              <Ionicons
+                name={lang.flag}
+                size={20}
+                color={theme.iconColor}
+                style={styles.flagIcon}
+              />
+              <ThemedText style={styles.languageText}>{lang.label}</ThemedText>
+              {language === lang.code && (
+                <Ionicons
+                  name="checkmark"
+                  size={20}
+                  color={theme.iconColorFocused}
+                />
+              )}
+            </TouchableOpacity>
+          ))}
+        </ThemedCard>
+
+        {/* EMAIL UPDATES */}
+        <ThemedCard style={styles.section}>
+          <View style={styles.row}>
+            <ThemedText title>Email Updates</ThemedText>
+            <Switch
+              value={emailUpdates}
+              onValueChange={setEmailUpdates}
+              thumbColor={emailUpdates ? theme.iconColorFocused : "#ccc"}
+            />
+          </View>
+          <ThemedText style={{ marginTop: 4, opacity: 0.7, fontSize: 13 }}>
+            Receive workout results via email
+          </ThemedText>
+        </ThemedCard>
+      </View>
+
+      {/* LOGOUT BUTTON (BOTTOM) */}
+      <TouchableOpacity
+        onPress={handleLogout}
+        style={[
+          styles.logoutButton,
+          { backgroundColor: theme.warning || "#D9534F" },
+        ]}
+      >
+        <Ionicons
+          name="log-out-outline"
+          size={20}
+          color="#fff"
+          style={{ marginRight: 8 }}
+        />
+        <ThemedText style={{ color: "#fff", fontWeight: "600" }}>
+          Log Out
+        </ThemedText>
+      </TouchableOpacity>
+    </ThemedView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 40,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "700",
+    marginBottom: 20,
+  },
+  section: {
+    marginBottom: 20,
+    padding: 15,
+    borderRadius: 12,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    marginBottom: 10,
+  },
+  languageRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  flagIcon: {
+    marginRight: 10,
+  },
+  languageText: {
+    flex: 1,
+    fontSize: 15,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 10,
+    marginBottom: 20, // space above the tab bar
+  },
+});

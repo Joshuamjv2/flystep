@@ -1,0 +1,1429 @@
+
+Sub parser
+	Private a As Char
+	Log(Main.messaggio_ble)
+	a = Mid(Main.messaggio_ble,1,1)
+	If a = "d" Then diag_p.riempi_diag
+	If a = "s" Then measure_sq.riempi_squat
+	If a = "j" Then measure_dr.riempi_drop
+	If a = "f" Then measure_fo.riempi_feet
+	If a = "r" Then measure_re.riempi_react
+	If a = "u" Then
+		measure_mu.riempi_multi
+		Log("multi")
+	End If
+End Sub
+
+
+And theses are the different pages:
+Sub Class_Globals
+	Private Root As B4XView 'ignore
+	Private xui As XUI 'ignore
+	Private B4XComboBox1 As B4XComboBox
+	Private B4XComboBox2 As B4XComboBox
+	Public Label1 As Label
+	Public Label2 As Label
+	Public Label3 As Label
+	Private Label4 As Label
+	Private Label5 As Label
+	Private ButtonHelp As Button
+	Private Exit As Button
+	Private Button_start As Button
+	Private Button_stop As Button
+	Private Button_discard As Button
+	Public Provider As FileProvider
+End Sub
+
+'You can add more parameters here.
+Public Sub Initialize As Object
+	Return Me
+End Sub
+
+'This event will be called once, before the page becomes visible.
+Private Sub B4XPage_Created (Root1 As B4XView)
+	Root = Root1
+	Root.LoadLayout("squat_page")
+	Provider.initialize
+End Sub
+
+Sub b4xpage_appear
+	Label1.text = Main.activities_name(1)
+	B4XComboBox2.cmbBox.Clear
+	B4XComboBox2.cmbBox.Add("SELEZIONA ESERCIZIO")
+	For i = 1 To Main.sub_activities_name(1,0)
+		B4XComboBox2.cmbBox.Add(Main.sub_activities_name(1,i))
+	Next
+	B4XComboBox1.cmbBox.Clear
+	B4XComboBox1.cmbBox.Add("ATLETA")
+	For i = 1 To Main.num_atleti
+		B4XComboBox1.cmbBox.Add(Main.cognome_atleta(i) & " " & Main.nome_atleta(i) )
+	Next
+	B4XComboBox2.SelectedIndex = 0
+	B4XComboBox1.SelectedIndex = 0
+	Button_discard.enabled = False
+
+	Label4.Color = Colors.gray
+	Label5.Color = Colors.gray
+	Main.stringatx = "Bs"
+	B4XPages.MainPage.ask_battery
+	Main.t_volo = ""
+	B4XPages.MainPage.esci_misura
+	Label3.Text = ""
+End Sub
+
+Sub B4XComboBox2_SelectedIndexChanged (Index As Int)
+	salva_dati 'se ci sono dati li salvo ed azzero i buffer
+	Main.sub_activity_selezionato = Main.sub_activities_id(1,Index)
+	Main.sub_act_sel = Index
+End Sub
+
+Sub B4XComboBox1_SelectedIndexChanged (Index As Int)
+	salva_dati 'se ci sono dati li salvo ed azzero i buffer
+	Main.atleta_selezionato = Main.id_atleta(Index)
+	Main.atleta_selezionato_height = Main.height_atleta(Index)
+	Main.atleta_selezionato_weight = Main.weight_atleta(Index)
+End Sub
+
+private Sub Exit_click
+	salva_dati
+	If  Main.m_atl.size > 1 Then
+		B4XPages.MainPage.send_mail
+	End If
+	B4XPages.ClosePage(Me)
+End Sub
+
+private Sub Button_start_click 'salvo la misura precedente che non è stata scartata
+	salva_dati 'se ci sono dati li salvo ed azzero i buffer
+	If B4XComboBox1.selectedindex = 0 Or B4XComboBox2.selectedindex = 0 Then
+		MsgboxAsync ("scegliere atleta ed esercizio!","START MISURA")
+	Else
+		Label3.Text = ""
+		B4XPages.MainPage.start_squat
+	End If
+End Sub
+
+
+Squat page:
+private Sub salva_dati
+	Log("salva_dati " & Main.t_volo)
+	If Main.t_volo <> "" Then
+		Dim misureList As List
+		misureList.Initialize
+		Dim misuraMap As Map
+		misuraMap.Initialize
+		misuraMap.Put("start", "True")
+		misuraMap.Put("value", Main.t_volo)
+		misuraMap.Put("attribute_id", Main.tempo_volo)
+		misureList.Add(misuraMap)
+		'sommo i dati per ottenere una sola map contenente tutto
+		Dim allData As Map
+		allData.Initialize
+		allData.Put("sub_activity_id", Main.sub_activity_selezionato)
+		allData.Put("athlete_id", Main.atleta_selezionato)
+		allData.Put("height", Main.atleta_selezionato_height)
+		allData.Put("weight", Main.atleta_selezionato_weight)
+		allData.Put("device_id", Main.device_in_uso)
+		allData.Put("team_id", Main.team_selezionato)
+		allData.Put("role_id", Main.role_in_use)
+		allData.Put("measures", misureList)
+
+		'Crea JSON da Map
+		Dim jsonGen As JSONGenerator
+		jsonGen.Initialize(allData)
+ 		Dim jsonString As String = jsonGen.ToString
+		'invio al server
+		CallSubDelayed2(gestione_api, "salva_misura2",jsonString)
+		
+		'aggiungo a mail
+		Main.m_es.add(B4XComboBox2.cmbBox.GetItem(B4XComboBox2.selectedindex))
+		Main.m_atl.add(B4XComboBox1.cmbBox.GetItem(B4XComboBox1.selectedindex))
+		Main.m_contatto.Add("---")
+		Main.m_volo.Add(Main.t_volo)
+		Main.m_distanza.Add("")
+		Main.m_note.Add("")
+		Main.t_volo = ""
+		Main.m_note.Add("")
+	End If
+	Button_discard.enabled = False
+End Sub
+
+private Sub ButtonHelp_click
+	If Main.sub_act_sel > 0 Then 
+		MsgboxAsync (Main.sub_activities_description(1,Main.sub_act_sel),"Help")
+	End If
+End Sub
+
+private Sub button_stop_click
+	Label3.Text = ""
+	B4XPages.MainPage.esci_misura
+End Sub
+
+private Sub Button_discard_click
+	Main.t_volo = ""
+	Button_discard.enabled = False
+	Label3.Text = ""
+End Sub
+	
+public Sub riempi_squat
+	Private a As Char
+	riempi_batt
+	a = Mid(Main.messaggio_ble,4,1)
+	If a = "E" Then
+		MsgboxAsync ("NON SENTO ATLETA","MISURA")
+	End If
+	If a = "O" Then 
+		Label3.Text = "MISURA"
+	End If
+	If a = "M" Then
+		Main.t_volo = Mid(Main.messaggio_ble,5,4)
+		Main.misura_selezionata = Mid(Main.messaggio_ble,5,4)
+		B4XPages.MainPage.calcola_altezza
+		Label3.Text =  Main.altezza & " cM   " & Main.t_volo & " mS"
+		Button_discard.enabled = True
+	End If
+
+End Sub
+
+private Sub riempi_batt
+	Private c As Char
+	'batterie
+	c = Mid(Main.messaggio_ble,2,1)
+	If c = "0" Then Label4.Color = Colors.red
+	If c = "1" Then Label4.Color = Colors.yellow
+	If c = "2" Then Label4.Color = Colors.green
+	If c = "3" Then Label4.Color = Colors.gray
+	c = Mid(Main.messaggio_ble,3,1)
+	If c = "0" Then Label5.Color = Colors.red
+	If c = "1" Then Label5.Color = Colors.Yellow
+	If c = "2" Then Label5.Color = Colors.green
+	If c = "3" Then Label5.Color = Colors.gray
+End Sub
+
+Sub Mid(Text As String, Start As Int, Length As Int) As String
+	Return Text.SubString2(Start-1,Start+Length-1)
+End Sub
+
+
+
+React page:
+Sub Class_Globals
+	Private Root As B4XView 'ignore
+	Private xui As XUI 'ignore
+	Private B4XComboBox1 As B4XComboBox
+	Private B4XComboBox2 As B4XComboBox
+	Private Label1 As Label
+	Private label4 As Label
+	Private label5 As Label
+	Private label6 As Label
+	Private ButtonHelp As Button
+	Private clv1 As CustomListView
+	Private Exit As Button
+	Private Button_start As Button
+	Private Button_stop As Button
+	Private Button_discard As Button
+	Private Provider As FileProvider
+	Private dati_presenti As Int
+End Sub
+
+
+'You can add more parameters here.
+Public Sub Initialize As Object
+	Return Me
+End Sub
+
+'This event will be called once, before the page becomes visible.
+Private Sub B4XPage_Created (Root1 As B4XView)
+	Root = Root1
+	Root.LoadLayout("react_page")
+	Provider.initialize
+End Sub
+
+
+
+Sub b4xpage_appear
+	Label1.text = Main.activities_name(2)
+
+	B4XComboBox2.cmbBox.Clear
+	B4XComboBox2.cmbBox.Add("SELEZIONA ESERCIZIO")
+	
+	For i = 1 To Main.sub_activities_name(2,0)
+		B4XComboBox2.cmbBox.Add(Main.sub_activities_name(2,i))
+	Next
+	B4XComboBox1.cmbBox.Clear
+	B4XComboBox1.cmbBox.Add("ATLETA")
+	For i = 1 To Main.num_atleti
+		B4XComboBox1.cmbBox.Add(Main.cognome_atleta(i) & " " & Main.nome_atleta(i) )
+	Next
+	B4XComboBox1.SelectedIndex = 0
+	B4XComboBox2.SelectedIndex = 0
+	clv1.clear
+	label6.Text = ""
+	Main.n_salti = 0
+	Main.media_volo = 0
+	Main.media_contatto = 0
+	label4.Color = Colors.gray
+	label5.Color = Colors.gray
+	Button_discard.enabled = False
+	Main.stringatx = "Br"
+	B4XPages.MainPage.ask_battery
+End Sub
+
+private Sub Exit_click
+	salva_dati
+	If  Main.m_atl.size > 1 Then
+		B4XPages.MainPage.send_mail
+	End If
+	B4XPages.ClosePage(Me)
+End Sub
+
+private Sub ButtonHelp_click
+	If Main.sub_act_sel > 0 Then
+		MsgboxAsync (Main.sub_activities_description(2,Main.sub_act_sel),"Help")
+	End If
+End Sub
+
+
+private Sub salva_dati
+	Dim iii As Int
+	If dati_presenti = 1 Then
+		Log("dati pres " & Main.t_m)
+		'memorizzo i campi unici della misura
+		dati_presenti = 0
+'		Dim uniqueFields As Map
+'		uniqueFields.Initialize
+'		uniqueFields.Put("sub_activity_id", Main.sub_activity_selezionato)
+'		uniqueFields.Put("athlete_id", Main.atleta_selezionato)
+'		uniqueFields.Put("device_id", Main.device_in_uso)
+'		uniqueFields.Put("team_id", Main.team_selezionato)
+'		uniqueFields.Put("role_id", Main.role_in_use)
+'
+		'aggiungo misure (a coppie prima tempo volo)
+		Dim misureList As List
+		misureList.Initialize
+		Dim misuraMap As Map
+		For iii = 1 To Main.t_m
+			Log ("iii " & iii)
+			'aggiungo misure (a coppie prima tempo volo)
+			misuraMap.Initialize
+			'tempo volo
+			'segno prima misura ed alzo flag
+			If iii = 1 Then
+				misuraMap.Put("start", "True")
+			Else
+				misuraMap.Put("start", "False")
+			End If
+			misuraMap.Put("value", Main.t_v(iii))
+			misuraMap.Put("attribute_id", Main.tempo_volo)
+			misureList.Add(misuraMap)
+			'tempo contatto
+			misuraMap.Initialize
+			misuraMap.Put("start", "False")
+			misuraMap.Put("value", Main.t_c(iii))
+			misuraMap.Put("attribute_id", Main.tempo_contatto)
+			misureList.Add(misuraMap)
+			
+			
+			
+			'dati per mail
+			If iii = 1 Then
+				Main.m_atl.add(B4XComboBox1.cmbBox.GetItem(B4XComboBox1.selectedindex))
+				Main.m_es.add(B4XComboBox2.cmbBox.GetItem(B4XComboBox2.selectedindex))'				Main.m_atl.add(B4XComboBox1.cmbBox.GetItem(B4XComboBox1.selectedindex))
+				Main.m_volo.Add(Main.t_v(iii))
+				Main.m_contatto.Add(Main.t_c(iii))
+				Main.m_distanza.Add("")
+				Main.m_note.Add("")
+			Else
+				Main.m_es.add(" ")
+				Main.m_atl.add(" ")
+				Main.m_volo.Add(Main.t_v(iii))
+				Main.m_contatto.Add(Main.t_c(iii))
+				Main.m_distanza.Add("")
+				Main.m_note.Add("")
+			End If
+		Next 
+		'sommo i dati per ottenere una sola map contenente tutto
+		Dim allData As Map
+		allData.Initialize
+		allData.Put("sub_activity_id", Main.sub_activity_selezionato)
+		allData.Put("athlete_id", Main.atleta_selezionato)
+		allData.Put("height", Main.atleta_selezionato_height)
+		allData.Put("weight", Main.atleta_selezionato_weight)
+		allData.Put("device_id", Main.device_in_uso)
+		allData.Put("team_id", Main.team_selezionato)
+		allData.Put("role_id", Main.role_in_use)
+		allData.Put("measures", misureList)
+		'Crea JSON da Map
+		Dim jsonGen As JSONGenerator
+		jsonGen.Initialize(allData)
+		Dim jsonString As String = jsonGen.ToString
+		'invio al server
+		Log ("salva_react " & jsonString)
+		CallSubDelayed2(gestione_api, "salva_misura2",jsonString)
+	End If
+	Button_discard.enabled = False
+End Sub
+
+private Sub button_start_click
+	salva_dati
+	If B4XComboBox1.selectedindex = 0 Or B4XComboBox2.selectedindex = 0 Then
+		MsgboxAsync ("scegliere atleta ed esercizio!","START MISURA")
+	Else
+		clv1.clear
+		label6.Text = ""
+		Main.n_salti = 0
+		Main.media_volo = 0
+		Main.media_contatto = 0
+		Main.misura_in_corso = 0
+		Main.tx_multi_react_param = Main.sub_activities_operation_value(2,Main.sub_act_sel)
+'		If B4XComboBox2.SelectedIndex < 5 Then
+'			 Main.tx_multi_react_param = 2
+'		Else
+'			Main.tx_multi_react_param = 1
+'		End If
+		Main.misura_in_corso = 0
+		B4XPages.MainPage.start_react
+	End If
+End Sub
+
+private Sub button_stop_click
+	B4XPages.MainPage.esci_misura
+	Main.n_salti = 0
+	Main.media_volo = 0
+	Main.media_contatto = 0
+	label6.Text = ""
+	clv1.clear
+	Return
+End Sub
+
+Sub B4XComboBox2_SelectedIndexChanged (Index As Int)
+	salva_dati 'se ci sono dati li salvo ed azzero i buffer
+	Main.sub_activity_selezionato = Main.sub_activities_id(2,Index)
+	Main.sub_act_sel = Index
+End Sub
+
+Sub B4XComboBox1_SelectedIndexChanged (Index As Int)
+	salva_dati
+	Main.atleta_selezionato = Main.id_atleta(Index)
+	Main.atleta_selezionato_height = Main.height_atleta(Index)
+	Main.atleta_selezionato_weight = Main.weight_atleta(Index)
+End Sub
+
+private Sub Button_discard_click
+	Main.t_volo = ""
+	Button_discard.enabled = False
+	dati_presenti = 0
+End Sub
+
+public Sub riempi_react
+	Private a As Char
+	Private stringa_scrittura As String
+	riempi_batt
+	a = Mid(Main.messaggio_ble,4,1)
+	If a = "E" Then
+		MsgboxAsync ("NON SENTO ATLETA","MISURA")
+	End If
+	If a = "O" Then
+		Main.t_m = 0
+		clv1.clear
+		clv1.AddTextItem("MISURA","value 1")
+	End If
+	
+	If a = "U" Then 'fine misura
+		Button_discard.enabled = True
+		dati_presenti = 1
+	End If
+
+
+	If a = "M" Then
+		dati_presenti = 1
+		Main.t_volo = Mid(Main.messaggio_ble,5,4) 
+		Main.t_contatto = Mid(Main.messaggio_ble,9,4)
+		'aggiorno per il server
+		Main.t_m = Main.t_m + 1
+		Log ("t_m " & Main.t_m)
+		Main.t_v(Main.t_m) = Main.t_volo
+		Main.t_c(Main.t_m) = Main.t_contatto
+		'aggiunta calcolo potenza
+		Main.media_volo = Main.media_volo + Main.t_volo / 1000
+		Main.media_contatto = Main.media_contatto + Main.t_contatto / 1000
+		Main.n_salti = Main.n_salti + 1
+		If Main.n_salti > 0 Then
+			label6.text = Round2((96.2361 * Main.media_volo * (Main.media_volo + Main.media_contatto)) / (4 * Main.n_salti * Main.media_contatto),2)
+		Else
+			label6.text = ""
+		End If
+		B4XPages.MainPage.calcola_altezza
+		stringa_scrittura = ""
+		For i = 1 To (10 - stringa_scrittura.Length)
+			stringa_scrittura = stringa_scrittura & " "
+		Next
+		stringa_scrittura = stringa_scrittura & Main.altezza & " cM      " & Main.t_contatto & " mS"
+		clv1.AddTextItem( stringa_scrittura ,"value 1")
+	End If
+End Sub
+
+
+private Sub riempi_batt
+	Private c As Char
+	'batterie
+	c = Mid(Main.messaggio_ble,2,1)
+	If c = "0" Then label4.Color = Colors.red
+	If c = "1" Then label4.Color = Colors.yellow
+	If c = "2" Then label4.Color = Colors.green
+	If c = "3" Then label4.Color = Colors.gray
+	c = Mid(Main.messaggio_ble,3,1)
+	If c = "0" Then label5.Color = Colors.red
+	If c = "1" Then label5.Color = Colors.Yellow
+	If c = "2" Then label5.Color = Colors.green
+	If c = "3" Then label5.Color = Colors.gray
+End Sub
+
+
+Sub Mid(Text As String, Start As Int, Length As Int) As String
+	Return Text.SubString2(Start-1,Start+Length-1)
+End Sub
+
+drop page:
+Sub Class_Globals
+	Private Root As B4XView 'ignore
+	Private xui As XUI 'ignore
+	Private B4XComboBox1 As B4XComboBox
+	Private B4XComboBox2 As B4XComboBox
+	Private Label1 As Label
+	Public label3 As Label
+	Public label5 As Label
+	Public label6 As Label
+	Public label7 As Label
+	Private ButtonHelp As Button
+	Private Exit As Button
+	Private Button_start As Button
+	Private Button_stop As Button
+	Private Button_discard As Button
+	Public Provider As FileProvider
+End Sub
+
+'You can add more parameters here.
+Public Sub Initialize As Object
+	Return Me
+End Sub
+
+'This event will be called once, before the page becomes visible.
+Private Sub B4XPage_Created (Root1 As B4XView)
+	Root = Root1
+	Root.LoadLayout("drop_page")
+	Provider.initialize
+End Sub
+
+
+Sub b4xpage_appear
+	Label1.text = Main.activities_name(3)
+	B4XComboBox2.cmbBox.Clear
+	B4XComboBox2.cmbBox.Add("SELEZIONA ESERCIZIO")
+	For i = 1 To Main.sub_activities_name(3,0)
+		B4XComboBox2.cmbBox.Add(Main.sub_activities_name(3,i))
+	Next
+	B4XComboBox1.cmbBox.Clear
+	B4XComboBox1.cmbBox.Add("ATLETA")
+	For i = 1 To Main.num_atleti
+		B4XComboBox1.cmbBox.Add(Main.cognome_atleta(i) & " " & Main.nome_atleta(i) )
+	Next
+	B4XComboBox2.SelectedIndex = 0
+	B4XComboBox1.SelectedIndex = 0
+	Button_discard.enabled = False
+	label6.Color = Colors.gray
+	label7.Color = Colors.gray
+	Button_discard.enabled = False
+	Main.stringatx = "Bj"
+	B4XPages.MainPage.ask_battery
+	B4XPages.MainPage.esci_misura
+	label3.Text = ""
+	label5.Text = ""
+	Main.tempo_volo = "d4ebb79e-a0a8-4550-8bc4-e4336b8490a3"
+	Main.tempo_contatto = "f5daa493-5054-4ad2-97b0-d9db95e7cdd6"
+End Sub
+
+Sub B4XComboBox2_SelectedIndexChanged (Index As Int)
+	salva_dati 'se ci sono dati li salvo ed azzero i buffer
+	Main.sub_activity_selezionato = Main.sub_activities_id(3,Index)
+	Main.sub_act_sel = Index
+End Sub
+
+Sub B4XComboBox1_SelectedIndexChanged (Index As Int)
+	salva_dati 'se ci sono dati li salvo ed azzero i buffer
+	Main.atleta_selezionato = Main.id_atleta(Index)
+	Main.atleta_selezionato_height = Main.height_atleta(Index)
+	Main.atleta_selezionato_weight = Main.weight_atleta(Index)
+End Sub
+
+
+private Sub Exit_click
+	salva_dati
+	If  Main.m_atl.size > 1 Then
+		B4XPages.MainPage.send_mail
+	End If
+	B4XPages.ClosePage(Me)
+End Sub
+
+
+private Sub salva_dati
+	If Main.t_volo <> "" Then
+		'memorizzo i campi unici della misura
+'		Dim uniqueFields As Map
+'		uniqueFields.Initialize
+'		uniqueFields.Put("sub_activity_id", Main.sub_activity_selezionato)
+'		uniqueFields.Put("athlete_id", Main.atleta_selezionato)
+'		uniqueFields.Put("device_id", Main.device_in_uso)
+'		uniqueFields.Put("team_id", Main.team_selezionato)
+'		uniqueFields.Put("role_id", Main.role_in_use)
+		'aggiungo misura
+		Dim misureList As List
+		misureList.Initialize
+		Dim misuraMap As Map
+		misuraMap.Initialize
+		misuraMap.Put("start", "True")
+		misuraMap.Put("value", Main.t_contatto)
+		misuraMap.Put("attribute_id", Main.tempo_contatto)
+		misureList.Add(misuraMap)
+		
+		misuraMap.Initialize
+		misuraMap.Put("start", "False")
+		misuraMap.Put("value", Main.t_volo)
+		misuraMap.Put("attribute_id", Main.tempo_volo)
+		misureList.Add(misuraMap)
+		'sommo i dati per ottenere una sola map contenente tutto
+		Dim allData As Map
+		allData.Initialize
+		allData.Put("sub_activity_id", Main.sub_activity_selezionato)
+		allData.Put("athlete_id", Main.atleta_selezionato)
+		allData.Put("height", Main.atleta_selezionato_height)
+		allData.Put("weight", Main.atleta_selezionato_weight)
+		allData.Put("device_id", Main.device_in_uso)
+		allData.Put("team_id", Main.team_selezionato)
+		allData.Put("role_id", Main.role_in_use)
+		allData.Put("measures", misureList)
+		'Crea JSON da Map
+		Dim jsonGen As JSONGenerator
+		jsonGen.Initialize(allData)
+		Dim jsonString As String = jsonGen.ToString
+		'invio al server
+		CallSubDelayed2(gestione_api, "salva_misura2",jsonString)
+
+		'salvo sulla matrice per la mail
+		Main.m_es.add(B4XComboBox2.cmbBox.GetItem(B4XComboBox2.selectedindex))
+		Main.m_atl.add(B4XComboBox1.cmbBox.GetItem(B4XComboBox1.selectedindex))
+		Main.m_volo.Add(Main.t_volo)
+		Main.m_contatto.Add(Main.t_contatto)
+		Main.t_volo = ""
+		Main.m_note.Add("")
+		Main.m_distanza.Add("")
+	End If
+	Button_discard.enabled = False
+End Sub
+
+
+private Sub ButtonHelp_click
+	If Main.sub_act_sel > 0 Then
+		MsgboxAsync (Main.sub_activities_description(3,Main.sub_act_sel),"Help")
+	End If
+End Sub
+
+
+private Sub Button_start_click
+	salva_dati
+	If B4XComboBox1.selectedindex = 0 Or B4XComboBox2.selectedindex = 0 Then
+		MsgboxAsync ("scegliere atleta ed esercizio!","START MISURA")
+	Else
+		label3.Text = ""
+		B4XPages.MainPage.start_drop
+	End If
+End Sub
+
+
+private Sub button_stop_click
+	B4XPages.MainPage.esci_misura
+	label3.Text = ""
+	label5.Text = ""
+End Sub
+
+private Sub Button_discard_click
+	Main.t_volo = ""
+	Button_discard.enabled = False
+	label3.Text = ""
+	label5.Text = ""
+End Sub
+
+	
+public Sub riempi_drop
+	Private a As Char
+	riempi_batt
+	a = Mid(Main.messaggio_ble,4,1)
+	If a = "E" Then
+		MsgboxAsync ("ATLETA PRESENTE","MISURA")
+	End If
+	If a = "O" Then
+		label3.Text = "MISURA"
+		label5.Text = ""
+	End If
+	If a = "M" Then
+		Main.t_volo = Mid(Main.messaggio_ble,5,4)
+		Main.t_contatto = Mid(Main.messaggio_ble,9,4)
+		B4XPages.MainPage.calcola_altezza
+		label3.Text =  Main.altezza & " cM"
+		label5.text = Main.t_contatto & " mS"
+		Button_discard.enabled = True
+	End If
+
+End Sub
+
+private Sub riempi_batt
+	Private c As Char
+	'batterie
+	c = Mid(Main.messaggio_ble,2,1)
+	If c = "0" Then label6.Color = Colors.red
+	If c = "1" Then label6.Color = Colors.yellow
+	If c = "2" Then label6.Color = Colors.green
+	If c = "3" Then label6.Color = Colors.gray
+	c = Mid(Main.messaggio_ble,3,1)
+	If c = "0" Then label7.Color = Colors.red
+	If c = "1" Then label7.Color = Colors.Yellow
+	If c = "2" Then label7.Color = Colors.green
+	If c = "3" Then label7.Color = Colors.gray
+End Sub
+
+Sub Mid(Text As String, Start As Int, Length As Int) As String
+	Return Text.SubString2(Start-1,Start+Length-1)
+End Sub
+
+Multi page:
+Sub Class_Globals
+	Private Root As B4XView 'ignore
+	Private xui As XUI 'ignore
+	Private B4XComboBox1 As B4XComboBox
+	Private B4XComboBox2 As B4XComboBox
+	Private Label1 As Label
+	Private label4 As Label
+	Private label5 As Label
+	Private label6 As Label
+	Private ButtonHelp As Button
+	Private clv1 As CustomListView
+	Private Exit As Button
+	Private Button_start As Button
+	Private Button_stop As Button
+	Private Button_discard As Button
+	Private Provider As FileProvider
+	Private dati_presenti As Int
+End Sub
+
+'You can add more parameters here.
+Public Sub Initialize As Object
+	Return Me
+End Sub
+
+'This event will be called once, before the page becomes visible.
+Private Sub B4XPage_Created (Root1 As B4XView)
+	Root = Root1
+	Root.LoadLayout("multi_page")
+
+	B4XComboBox1.SelectedIndex =0
+	B4XComboBox2.SelectedIndex = 0
+	Provider.initialize
+End Sub
+
+
+Sub b4xpage_appear
+	Label1.text = Main.activities_name(4)
+
+	B4XComboBox2.cmbBox.Clear
+	B4XComboBox2.cmbBox.Add("SELEZIONA ESERCIZIO")
+	
+	For i = 1 To Main.sub_activities_name(4,0)
+		B4XComboBox2.cmbBox.Add(Main.sub_activities_name(4,i))
+	Next
+	B4XComboBox1.cmbBox.Clear
+	B4XComboBox1.cmbBox.Add("ATLETA")
+	For i = 1 To Main.num_atleti
+		B4XComboBox1.cmbBox.Add(Main.cognome_atleta(i) & " " & Main.nome_atleta(i) )
+	Next
+	B4XComboBox1.SelectedIndex = 0
+	B4XComboBox2.SelectedIndex = 0
+	
+		B4XComboBox1.SelectedIndex = Main.index_atleta
+	B4XComboBox2.SelectedIndex = 0
+	clv1.clear
+	label4.Color = Colors.gray
+	label5.Color = Colors.gray
+	label6.Text = ""
+	Button_discard.enabled = False
+	Main.stringatx = "Bu"
+	B4XPages.MainPage.ask_battery
+	Button_discard.enabled = False
+End Sub
+
+private Sub Exit_click
+	salva_dati
+	If  Main.m_atl.size > 1 Then
+		B4XPages.MainPage.send_mail
+	End If
+	B4XPages.ClosePage(Me)
+End Sub
+
+private Sub Button_discard_click
+	Main.t_volo = ""
+	Button_discard.enabled = False
+End Sub
+
+private Sub salva_dati
+	Dim iii As Int
+	If dati_presenti = 1 Then
+		Log("dati pres " & Main.t_m)
+		'memorizzo i campi unici della misura
+		dati_presenti = 0
+		Dim uniqueFields As Map
+		uniqueFields.Initialize
+		uniqueFields.Put("sub_activity_id", Main.sub_activity_selezionato)
+		uniqueFields.Put("athlete_id", Main.atleta_selezionato)
+		uniqueFields.Put("height", Main.atleta_selezionato_height)
+		uniqueFields.Put("weight", Main.atleta_selezionato_weight)
+		uniqueFields.Put("device_id", Main.device_in_uso)
+		uniqueFields.Put("team_id", Main.team_selezionato)
+		uniqueFields.Put("role_id", Main.role_in_use)
+
+		'aggiungo misure (a coppie prima tempo volo)
+		Dim misureList As List
+		misureList.Initialize
+		Dim misuraMap As Map
+		For iii = 1 To Main.t_m
+			Log ("iii " & iii)
+			'aggiungo misure (a coppie prima tempo volo)
+			misuraMap.Initialize
+			'tempo volo
+			'segno prima misura ed alzo flag
+			If iii = 1 Then
+				misuraMap.Put("start", "True")
+			Else
+				misuraMap.Put("start", "False")
+			End If
+			misuraMap.Put("value", Main.t_v(iii))
+			misuraMap.Put("attribute_id", Main.tempo_volo)
+			misureList.Add(misuraMap)
+			'tempo contatto
+			misuraMap.Initialize
+			misuraMap.Put("start", "False")
+			misuraMap.Put("value", Main.t_c(iii))
+			misuraMap.Put("attribute_id", Main.tempo_contatto)
+			misureList.Add(misuraMap)
+			'dati per mail
+			If iii = 1 Then
+				Main.m_atl.add(B4XComboBox1.cmbBox.GetItem(B4XComboBox1.selectedindex))
+				Main.m_es.add(B4XComboBox2.cmbBox.GetItem(B4XComboBox2.selectedindex))'				Main.m_atl.add(B4XComboBox1.cmbBox.GetItem(B4XComboBox1.selectedindex))
+				Main.m_volo.Add(Main.t_v(iii))
+				Main.m_contatto.Add(Main.t_c(iii))
+				Main.m_note.Add("")
+				Main.m_distanza.Add("")
+			Else
+				Main.m_es.add(" ")
+				Main.m_atl.add(" ")
+				Main.m_volo.Add(Main.t_v(iii))
+				Main.m_contatto.Add(Main.t_c(iii))
+				Main.m_note.Add("")
+				Main.m_distanza.Add("")
+			End If
+		Next 
+		'sommo i dati per ottenere una sola map contenente tutto
+		Dim allData As Map
+		allData.Initialize
+		allData.Put("sub_activity_id", Main.sub_activity_selezionato)
+		allData.Put("athlete_id", Main.atleta_selezionato)
+		allData.Put("height", Main.atleta_selezionato_height)
+		allData.Put("weight", Main.atleta_selezionato_weight)
+		allData.Put("device_id", Main.device_in_uso)
+		allData.Put("team_id", Main.team_selezionato)
+		allData.Put("role_id", Main.role_in_use)
+		allData.Put("measures", misureList)
+		'Crea JSON da Map
+		Dim jsonGen As JSONGenerator
+		jsonGen.Initialize(allData)
+		Dim jsonString As String = jsonGen.ToString
+		'invio al server
+		Log ("salva_react " & jsonString)
+		CallSubDelayed2(gestione_api, "salva_misura2",jsonString)
+	End If
+	Button_discard.enabled = False
+End Sub
+
+private Sub ButtonHelp_click
+	If Main.sub_act_sel > 0 Then 
+		MsgboxAsync (Main.sub_activities_description(4,Main.sub_act_sel),"Help")
+	End If
+End Sub
+
+private Sub button_start_click
+	salva_dati
+	If B4XComboBox1.selectedindex = 0 Or B4XComboBox2.selectedindex = 0 Then
+		MsgboxAsync ("scegliere atleta ed esercizio!","START MISURA")
+	Else
+		Main.media_volo = 0
+		Main.media_contatto = 0
+		Main.n_salti = 0
+		clv1.clear
+		label6.Text = ""
+		Main.misura_in_corso = 0
+'		If B4XComboBox2.SelectedIndex = 1 Or B4XComboBox2.SelectedIndex = 4 Then Main.tx_multi_react_param = 1
+'		If B4XComboBox2.SelectedIndex = 2 Or B4XComboBox2.SelectedIndex = 5 Then Main.tx_multi_react_param = 2
+'		If B4XComboBox2.SelectedIndex = 3 Or B4XComboBox2.SelectedIndex = 6 Then Main.tx_multi_react_param = 3
+		Main.tx_multi_react_param = Main.sub_activities_operation_value(4,Main.sub_act_sel)
+		B4XPages.MainPage.start_multi
+		Log ("mj" & Main.tx_multi_react_param & " " & Main.sub_act_sel)
+	End If
+End Sub
+
+
+
+Sub B4XComboBox1_SelectedIndexChanged (Index As Int)
+	Main.atleta_selezionato = Main.id_atleta(Index)
+	Main.atleta_selezionato_height = Main.height_atleta(Index)
+	Main.atleta_selezionato_weight = Main.weight_atleta(Index)
+End Sub
+'You can see the list of page related events in the B4XPagesManager object. The event name is B4XPage.
+
+
+Sub B4XComboBox2_SelectedIndexChanged (Index As Int)
+	salva_dati 'se ci sono dati li salvo ed azzero i buffer
+	Main.sub_activity_selezionato = Main.sub_activities_id(4,Index)
+	Main.sub_act_sel = Index
+End Sub
+
+
+
+private Sub button_stop_click
+	B4XPages.MainPage.esci_misura
+	label6.Text = ""
+	clv1.clear
+	Return
+End Sub
+
+
+public Sub riempi_multi
+	Private a As Char
+	Private stringa_scrittura As String
+	riempi_batt
+	a = Mid(Main.messaggio_ble,4,1)
+	If a = "E" Then
+		MsgboxAsync ("NON SENTO ATLETA","MISURA")
+	End If
+	
+	If a = "O" Then
+		clv1.clear
+		clv1.AddTextItem("MISURA","value 1")
+		Main.t_m = 0
+	End If
+		
+	If a = "U" Then 'fine misura
+		Button_discard.enabled = True
+		dati_presenti = 1
+	End If
+
+	
+	If a = "M" Then
+		Main.t_volo = Mid(Main.messaggio_ble,5,4)
+		Main.t_contatto = Mid(Main.messaggio_ble,9,4)
+		'aggiorno per il server
+		Main.t_m = Main.t_m +1
+		Main.t_v(Main.t_m) = Main.t_volo
+		Main.t_c(Main.t_m) = Main.t_contatto
+		B4XPages.MainPage.calcola_altezza
+		'aggiunta calcolo potenza
+		Main.media_volo = Main.media_volo + Main.t_volo / 1000
+		Main.media_contatto = Main.media_contatto + Main.t_contatto / 1000
+		Main.n_salti = Main.n_salti + 1
+		If Main.n_salti > 0 Then
+			label6.text = Round2((96.2361 * Main.media_volo * (Main.media_volo + Main.media_contatto)) / (4 * Main.n_salti * Main.media_contatto),2)
+		Else
+			label6.text = ""
+		End If
+		stringa_scrittura = ""
+		For i = 1 To (10 - stringa_scrittura.Length)
+			stringa_scrittura = stringa_scrittura & " "
+		Next
+		stringa_scrittura = stringa_scrittura & Main.altezza & " cM    " & Main.t_contatto  & " mS"
+		clv1.AddTextItem( stringa_scrittura ,"value 1")
+	End If
+
+End Sub
+
+
+private Sub riempi_batt
+	Private c As Char
+	'batterie
+	c = Mid(Main.messaggio_ble,2,1)
+	If c = "0" Then label4.Color = Colors.red
+	If c = "1" Then label4.Color = Colors.yellow
+	If c = "2" Then label4.Color = Colors.green
+	If c = "3" Then label4.Color = Colors.gray
+	c = Mid(Main.messaggio_ble,3,1)
+	If c = "0" Then label5.Color = Colors.red
+	If c = "1" Then label5.Color = Colors.Yellow
+	If c = "2" Then label5.Color = Colors.green
+	If c = "3" Then label5.Color = Colors.gray
+End Sub
+
+
+Sub Mid(Text As String, Start As Int, Length As Int) As String
+	Return Text.SubString2(Start-1,Start+Length-1)
+End Sub
+
+Foot page:
+Sub Class_Globals
+	Private Root As B4XView 'ignore
+	Private xui As XUI 'ignore
+	Public Label1 As Label
+	Public Label2 As Label
+	Public Label3 As Label
+	Public Label4 As Label
+	Public Label5 As Label
+	Public Label6 As Label
+	Public Label7 As Label
+	Public Label8 As Label
+	Public Label9 As Label
+	Public Label10 As Label
+	Public Label11 As Label
+	Public Label12 As Label
+	Public Label13 As Label
+	Public Label14 As Label
+	Public Label15 As Label
+	Public Label16 As Label
+	Public Label17 As Label
+	Public Label18 As Label
+	Public Label19 As Label
+	Public Label20 As Label
+	Public Label21 As Label
+	Public Label22 As Label
+	Public Label23 As Label
+	Public Label24 As Label
+	Public Label25 As Label
+	Public Label26 As Label
+	Public Label27 As Label
+	Public Label28 As Label
+	Public Label29 As Label
+	Public Label30 As Label
+	Public Label31 As Label
+	Public Label32 As Label
+	Public Label33 As Label
+	
+	Private B4XComboBox1 As B4XComboBox
+	Private B4XComboBox2 As B4XComboBox
+	Private EditText1 As EditText
+	Private Exitfoot As Button
+	Private Button_start As Button
+	Private Button_stop As Button
+	Private Button_discard As Button
+	Private ButtonHelp As Button
+End Sub
+
+'You can add more parameters here.
+Public Sub Initialize As Object
+	Return Me
+End Sub
+
+'This event will be called once, before the page becomes visible.
+Private Sub B4XPage_Created (Root1 As B4XView)
+	Root = Root1
+	Root.LoadLayout("feet_page")
+
+	Main.lista_atleti.clear
+	B4XComboBox1.cmbBox.Clear
+
+End Sub
+
+
+Sub b4xpage_appear
+	Label26.text =  Main.activities_name(6)
+	cambia_lingua
+	B4XComboBox2.cmbBox.Clear
+	If Main.language = "it" Then B4XComboBox2.cmbBox.Add("SELEZIONA ESERCIZIO")
+	If Main.language = "en" Then B4XComboBox2.cmbBox.Add("SELECT EXERCISE")
+	
+
+	For i = 1 To Main.sub_activities_name(6,0)
+		B4XComboBox2.cmbBox.Add(Main.sub_activities_name(6,i))
+	Next
+	B4XComboBox1.cmbBox.Clear
+	If Main.language = "it" Then B4XComboBox1.cmbBox.Add("ATLETA")
+	If Main.language = "en" Then B4XComboBox1.cmbBox.Add("ATHLETE")
+	For i = 1 To Main.num_atleti
+		B4XComboBox1.cmbBox.Add(Main.cognome_atleta(i) & " " & Main.nome_atleta(i) )
+	Next
+	B4XComboBox1.SelectedIndex = 0
+	B4XComboBox2.SelectedIndex = 0
+	
+	B4XComboBox1.SelectedIndex = Main.index_atleta
+	B4XComboBox2.SelectedIndex = 0
+	Label27.Text = ""
+	Label31.Text = ""
+	EditText1.Text = ""
+	Label29.Color = Colors.gray
+	Label30.Color = Colors.gray
+	Main.stringatx = "Bf"
+	B4XPages.MainPage.ask_battery
+End Sub
+
+
+
+private Sub ButtonHelp_click
+	If Main.sub_act_sel > 0 Then 
+		MsgboxAsync (Main.sub_activities_description(6,Main.sub_act_sel),"Help")
+	End If
+End Sub
+
+private Sub Button_start_click
+	salva_dati 'se ci sono dati li salvo ed azzero i buffer
+	If B4XComboBox1.selectedindex = 0 Or B4XComboBox2.selectedindex = 0 Then
+		If Main.language = "it" Then MsgboxAsync ("scegliere atleta ed esercizio!","START MISURA")
+		If Main.language = "en" Then MsgboxAsync ("choose athlete and exercise!","START MEASURE")
+	Else
+		Label27.Text = ""
+		Label31.Text = ""
+		EditText1.text = ""
+		spegni_led_feet
+		Button_discard.Enabled = False
+		B4XPages.MainPage.start_foot
+	End If
+End Sub
+
+private Sub Button_discard_click
+	Main.t_contatto = ""
+	Button_discard.enabled = False
+	Label3.Text = ""
+End Sub
+
+private Sub button_stop_click
+	Label27.Text = ""
+	B4XPages.MainPage.esci_misura
+	Return
+End Sub
+
+Sub B4XComboBox2_SelectedIndexChanged (Index As Int)
+	salva_dati 'se ci sono dati li salvo ed azzero i buffer
+	Main.sub_activity_selezionato = Main.sub_activities_id(6,Index)
+	Main.sub_act_sel = Index
+End Sub
+
+Sub B4XComboBox1_SelectedIndexChanged (Index As Int)
+	salva_dati 'se ci sono dati li salvo ed azzero i buffer
+	Main.atleta_selezionato = Main.id_atleta(Index)
+	Main.atleta_selezionato_height = Main.height_atleta(Index)
+	Main.atleta_selezionato_weight = Main.weight_atleta(Index)
+End Sub
+
+
+private Sub Exitfoot_click
+	salva_dati
+	If  Main.m_atl.size > 1 Then
+		B4XPages.MainPage.send_mail
+	End If
+	B4XPages.ClosePage(Me)
+End Sub
+
+
+private Sub salva_dati
+	If Main.t_contatto <> "" Then
+		If EditText1.Text <> "" Then
+			Dim testo As String
+			testo = EditText1.Text
+			If testo.Length > 20 Then
+				testo = testo.SubString2(0, 20)
+			End If
+			Main.commento = testo
+		Else
+			Main.commento = ""
+		End If
+		Button_discard.Enabled = False
+		'memorizzo i campi unici della misura
+		Dim uniqueFields As Map
+		uniqueFields.Initialize
+		uniqueFields.Put("sub_activity_id", Main.sub_activity_selezionato)
+		uniqueFields.Put("athlete_id", Main.atleta_selezionato)
+		uniqueFields.Put("height", Main.atleta_selezionato_height)
+		uniqueFields.Put("weight", Main.atleta_selezionato_weight)
+		uniqueFields.Put("device_id", Main.device_in_uso)
+		uniqueFields.Put("team_id", Main.team_selezionato)
+		uniqueFields.Put("role_id", Main.role_in_use)
+		uniqueFields.Put("Note", Main.commento)
+		'aggiungo misura
+		Dim misureList As List
+		misureList.Initialize
+		Dim misuraMap As Map
+		misuraMap.Initialize
+		misuraMap.Put("start", "True")
+		misuraMap.Put("value", Main.t_contatto)
+		misuraMap.Put("attribute_id", Main.tempo_contatto)
+		misureList.Add(misuraMap)
+		
+		misuraMap.Initialize
+		misuraMap.Put("start", "False")
+		misuraMap.Put("value", Main.distanza)
+		misuraMap.Put("attribute_id", Main.dist)' "73e0ac8f-b5e8-44f3-9557-2db5bb98c8ce"
+		misureList.Add(misuraMap)
+		'sommo i dati per ottenere una sola map contenente tutto
+		Dim allData As Map
+		allData.Initialize
+		allData.Put("sub_activity_id", Main.sub_activity_selezionato)
+		allData.Put("athlete_id", Main.atleta_selezionato)
+		allData.Put("height", Main.atleta_selezionato_height)
+		allData.Put("weight", Main.atleta_selezionato_weight)
+		allData.Put("device_id", Main.device_in_uso)
+		allData.Put("team_id", Main.team_selezionato)
+		allData.Put("role_id", Main.role_in_use)
+		allData.put("Note", Main.commento)
+		allData.Put("measures", misureList)
+		'Crea JSON da Map
+		Dim jsonGen As JSONGenerator
+		jsonGen.Initialize(allData)
+		Dim jsonString As String = jsonGen.ToString
+		'invio al server
+		CallSubDelayed2(gestione_api, "salva_misura2",jsonString)
+
+		'salvo sulla matrice per la mail
+		Main.m_es.add(B4XComboBox2.cmbBox.GetItem(B4XComboBox2.selectedindex))
+		Main.m_atl.add(B4XComboBox1.cmbBox.GetItem(B4XComboBox1.selectedindex))
+		Main.m_distanza.Add(Main.distanza)
+		Main.m_contatto.Add(Main.t_contatto)
+		Main.m_volo.Add("")
+		Main.t_volo = ""
+		Main.t_contatto = ""
+		Main.m_note.Add(Main.commento)
+	End If
+	Button_discard.enabled = False
+End Sub
+
+public Sub riempi_feet
+	Dim c As Char
+	Private a As Char
+	riempi_batt
+	a = Mid(Main.messaggio_ble,4,1)
+	If a = "E" Then
+	If Main.language = "en" Then MsgboxAsync ("PRESENCE ERROR","MEASURE")
+	If Main.language = "it" Then MsgboxAsync ("ERRORE PRESENZA","MISURA")
+	End If
+	If a = "O" Then
+		If Main.language = "en" Then Label27.Text = "MEASURE"
+		If Main.language = "it" Then Label27.Text = "MISURA"
+	End If
+	If a = "M" Then
+	Log("scrivo misure")
+	Main.m_es.add("FEET")
+	Button_discard.Enabled = True
+	Try
+		Dim lflag As Int
+		Dim led_spento As Int
+		lflag = 0
+		Main.distanza = 0
+		For i = 1 To 23
+		c = Mid(Main.messaggio_ble,i + 5,1)
+			If c = "1" Then 
+				If lflag = 0 Then
+					lflag = 1
+					led_spento = i
+				End If
+			End If
+		Next
+		Main.distanza = (led_spento * 3.8) + 5	
+		
+		
+		'tempo contatto senza nessuna modifica
+		Main.t_contatto = Mid(Main.messaggio_ble,29,4)
+		Label27.Text = Main.t_contatto & " mS"
+		Label31.Text = Main.distanza & "cm"
+		c = Mid(Main.messaggio_ble,5,1)
+		If c = "0" Then Label1.Color = Colors.red
+		If c = "1" Then Label1.Color = Colors.green
+	
+		c = Mid(Main.messaggio_ble,6,1)
+		If c = "0" Then Label2.Color = Colors.red
+		If c = "1" Then Label2.Color = Colors.green
+		If c = "2" Then Label2.Color = Colors.blue
+		If c = "3" Then Label2.Color = Colors.gray
+	
+		c = Mid(Main.messaggio_ble,7,1)
+		If c = "0" Then Label3.Color = Colors.red
+		If c = "1" Then Label3.Color = Colors.green
+		If c = "2" Then Label3.Color = Colors.blue
+		If c = "3" Then Label3.Color = Colors.gray
+	
+		c = Mid(Main.messaggio_ble,8,1)
+		If c = "0" Then Label4.Color = Colors.red
+		If c = "1" Then Label4.Color = Colors.green
+		If c = "2" Then Label4.Color = Colors.blue
+		If c = "3" Then Label4.Color = Colors.gray
+
+		c = Mid(Main.messaggio_ble,9,1)
+		If c = "0" Then Label5.Color = Colors.red
+		If c = "1" Then Label5.Color = Colors.green
+		If c = "2" Then Label5.Color = Colors.blue
+		If c = "3" Then Label5.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,10,1)
+		If c = "0" Then Label6.Color = Colors.red
+		If c = "1" Then Label6.Color = Colors.green
+		If c = "2" Then Label6.Color = Colors.blue
+		If c = "3" Then Label6.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,11,1)
+		If c = "0" Then Label7.Color = Colors.red
+		If c = "1" Then Label7.Color = Colors.green
+		If c = "2" Then Label7.Color = Colors.blue
+		If c = "3" Then Label7.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,12,1)
+		If c = "0" Then Label8.Color = Colors.red
+		If c = "1" Then Label8.Color = Colors.green
+		If c = "2" Then Label8.Color = Colors.blue
+		If c = "3" Then Label8.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,13,1)
+		If c = "0" Then Label9.Color = Colors.red
+		If c = "1" Then Label9.Color = Colors.green
+		If c = "2" Then Label9.Color = Colors.blue
+		If c = "3" Then Label9.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,14,1)
+		If c = "0" Then Label10.Color = Colors.red
+		If c = "1" Then Label10.Color = Colors.green
+		If c = "2" Then Label10.Color = Colors.blue
+		If c = "3" Then Label10.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,15,1)
+		If c = "0" Then Label11.Color = Colors.red
+		If c = "1" Then Label11.Color = Colors.green
+		If c = "2" Then Label11.Color = Colors.blue
+		If c = "3" Then Label11.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,16,1)
+		If c = "0" Then Label12.Color = Colors.red
+		If c = "1" Then Label12.Color = Colors.green
+		If c = "2" Then Label12.Color = Colors.blue
+		If c = "3" Then Label12.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,17,1)
+		If c = "0" Then Label13.Color = Colors.red
+		If c = "1" Then Label13.Color = Colors.green
+		If c = "2" Then Label13.Color = Colors.blue
+		If c = "3" Then Label13.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,18,1)
+		If c = "0" Then Label14.Color = Colors.red
+		If c = "1" Then Label14.Color = Colors.green
+		If c = "2" Then Label14.Color = Colors.blue
+		If c = "3" Then Label14.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,19,1)
+		If c = "0" Then Label15.Color = Colors.red
+		If c = "1" Then Label15.Color = Colors.green
+		If c = "2" Then Label15.Color = Colors.blue
+		If c = "3" Then Label15.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,20,1)
+		If c = "0" Then Label16.Color = Colors.red
+		If c = "1" Then Label16.Color = Colors.green
+		If c = "2" Then Label16.Color = Colors.blue
+		If c = "3" Then Label16.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,21,1)
+		If c = "0" Then Label17.Color = Colors.red
+		If c = "1" Then Label17.Color = Colors.green
+		If c = "2" Then Label17.Color = Colors.blue
+		If c = "3" Then Label17.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,22,1)
+		If c = "0" Then Label18.Color = Colors.red
+		If c = "1" Then Label18.Color = Colors.green
+		If c = "2" Then Label18.Color = Colors.blue
+		If c = "3" Then Label18.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,23,1)
+		If c = "0" Then Label19.Color = Colors.red
+		If c = "1" Then Label19.Color = Colors.green
+		If c = "2" Then Label19.Color = Colors.blue
+		If c = "3" Then Label19.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,24,1)
+		If c = "0" Then Label20.Color = Colors.red
+		If c = "1" Then Label20.Color = Colors.green
+		If c = "2" Then Label20.Color = Colors.blue
+		If c = "3" Then Label20.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,25,1)
+		If c = "0" Then Label21.Color = Colors.red
+		If c = "1" Then Label21.Color = Colors.green
+		If c = "2" Then Label21.Color = Colors.blue
+		If c = "3" Then Label21.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,26,1)
+		If c = "0" Then Label22.Color = Colors.red
+		If c = "1" Then Label22.Color = Colors.green
+		If c = "2" Then Label22.Color = Colors.blue
+		If c = "3" Then Label22.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,27,1)
+		If c = "0" Then Label23.Color = Colors.red
+		If c = "1" Then Label23.Color = Colors.green
+		If c = "2" Then Label23.Color = Colors.blue
+		If c = "3" Then Label23.Color = Colors.gray
+		c = Mid(Main.messaggio_ble,28,1)
+		If c = "0" Then Label24.Color = Colors.red
+		If c = "1" Then Label24.Color = Colors.green
+		If c = "2" Then Label24.Color = Colors.blue
+		If c = "3" Then Label24.Color = Colors.gray
+	Catch
+		Log ("err riempimento foot")
+	End Try
+	End If
+
+End Sub
+
+private Sub riempi_batt
+	Private c As Char
+	'batterie
+	c = Mid(Main.messaggio_ble,2,1)
+	If c = "0" Then Label29.Color = Colors.red
+	If c = "1" Then Label29.Color = Colors.yellow
+	If c = "2" Then Label29.Color = Colors.green
+	If c = "3" Then Label29.Color = Colors.gray
+	c = Mid(Main.messaggio_ble,3,1)
+	If c = "0" Then Label30.Color = Colors.red
+	If c = "1" Then Label30.Color = Colors.Yellow
+	If c = "2" Then Label30.Color = Colors.green
+	If c = "3" Then Label30.Color = Colors.gray
+End Sub
+
+
+public Sub spegni_led_feet
+	Label1.Color = Colors.gray
+	Label2.Color = Colors.gray
+	Label3.Color = Colors.gray
+	Label4.Color = Colors.gray
+	Label5.Color = Colors.gray
+	Label6.Color = Colors.gray
+	Label7.Color = Colors.gray
+	Label8.Color = Colors.gray
+	Label9.Color = Colors.gray
+	Label10.Color = Colors.gray
+	Label11.Color = Colors.gray
+	Label12.Color = Colors.gray
+	Label13.Color = Colors.gray
+	Label14.Color = Colors.gray
+	Label15.Color = Colors.gray
+	Label16.Color = Colors.gray
+	Label17.Color = Colors.gray
+	Label18.Color = Colors.gray
+	Label19.Color = Colors.gray
+	Label20.Color = Colors.gray
+	Label21.Color = Colors.gray
+	Label22.Color = Colors.gray
+	Label23.Color = Colors.gray
+	Label24.Color = Colors.gray
+End Sub
+
+
+Sub Mid(Text As String, Start As Int, Length As Int) As String
+	Return Text.SubString2(Start-1,Start+Length-1)
+End Sub
+
+Sub cambia_lingua
+	If Main.language = "it" Then
+		Button_discard.Text = "SCARTA"
+		Label28.Text = "Tempo cont."
+		Label32.Text = "distanza"
+		Label33.Text = "commenti"
+		
+	End If
+	If Main.language = "en" Then
+		Button_discard.Text = "DISCARD"
+		Label28.Text = "Contact time"
+		Label32.Text = "Distance"
+		Label33.Text = "Comments"
+	End If
+	
+End Sub
